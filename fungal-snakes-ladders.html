@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Biology Snakes and Ladders Game: The Fungal Kingdom</title>
+<style>
+:root{--bg:#f4f4f1;--ink:#2b2430;--panel:#fff;--line:#ddd8d2;--green:#8cc63f;--red:#ff5a5f;--plum:#8a5a76;--cell:#f3f3f3;--muted:#6b6470;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1f1a22;--ink:#f1ecf2;--panel:#2b2430;--line:#463d4c;--cell:#e9e6ea;--muted:#b4abba}}
+:root[data-theme="dark"]{--bg:#1f1a22;--ink:#f1ecf2;--panel:#2b2430;--line:#463d4c;--cell:#e9e6ea;--muted:#b4abba}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;min-height:100%}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 14px 30px}
+.stage{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center}
+.side{font-weight:800;font-size:clamp(24px,3.4vw,40px);line-height:1.05;writing-mode:vertical-rl;letter-spacing:.5px;text-align:center}
+.left{color:var(--green);transform:rotate(180deg)}
+.right{color:var(--red)}
+.board{width:100%;display:block;border-radius:6px;box-shadow:0 2px 14px rgba(0,0,0,.18)}
+.board text{font-family:inherit}
+.tok{transition:transform .22s ease-in-out}
+.panel{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.players{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pl{display:flex;align-items:center;gap:8px;padding:8px 10px;border:2px solid var(--line);border-radius:8px;font-size:15px}
+.pl.on{border-color:var(--red);background:rgba(255,90,95,.1)}
+.dot{width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35);flex:none}
+.pl b{margin-left:auto;font-variant-numeric:tabular-nums}
+.roll{display:flex;align-items:center;gap:14px;margin-bottom:10px}
+#die{width:72px;height:72px;border-radius:14px;background:#fff;color:#222;border:2px solid #222;display:grid;place-items:center;font-size:56px;line-height:1}
+#die.spin{animation:spin .5s linear}
+@keyframes spin{to{transform:rotate(360deg)}}
+button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:12px 18px;background:var(--red);color:#fff;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button.alt{background:transparent;color:var(--ink);border:2px solid var(--line)}
+button:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+#turn{font-size:17px;font-weight:700;margin:0 0 4px}
+#log{margin:8px 0 0;padding:0;list-style:none;font-size:14px;color:var(--muted);min-height:92px}
+#log li{padding:2px 0}
+#log li:first-child{color:var(--ink);font-weight:700}
+.legend{font-size:13px;color:var(--muted);margin:10px 0 0}
+#win{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;place-items:center;z-index:5}
+#win.show{display:grid}
+#win .box{background:var(--panel);padding:26px 30px;border-radius:14px;text-align:center;max-width:320px}
+#win h2{margin:0 0 6px;color:var(--red)}
+@media (max-width:720px){
+.stage{grid-template-columns:1fr}
+.side{writing-mode:horizontal-tb;transform:none;font-size:24px}
+.left{order:-1}.right{order:-2}
+.panel{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){.tok{transition:none}#die.spin{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="stage">
+<div class="side left">The Fungal Kingdom</div>
+<svg id="board" class="board" viewBox="0 0 1000 800" role="img" aria-label="Snakes and ladders board with 100 squares"></svg>
+<div class="side right">Biology Snakes and Ladders Game</div>
+</div>
+
+<div class="panel">
+<div class="card">
+<p id="turn">Player 1’s turn</p>
+<div class="roll">
+<div id="die" aria-live="polite">⚀</div>
+<button id="rollBtn">Roll the dice</button>
+<button id="resetBtn" class="alt">New game</button>
+</div>
+<ul id="log"></ul>
+</div>
+<div class="card">
+<div class="players" id="players"></div>
+<p class="legend">Ladders climb up, snakes slide down. Roll a 6 to take another turn. You must land exactly on 100 to win; an overshoot bounces you back.</p>
+</div>
+</div>
+</div>
+
+<div id="win"><div class="box"><h2 id="winTitle"></h2><p>reached square 100!</p><button id="again">Play again</button></div></div>
+
+<script>
+(function(){
+var CW=100,CH=80;
+var LADDERS={4:24,11:30,36:75,51:71,59:62};
+var SNAKES={98:79,95:74,84:57,73:53,65:46,48:27,37:17,21:2};
+var COLORS=["#e8505b","#1fa39a","#f2b134","#2d3a8c"];
+var NAMES=["Player 1","Player 2","Player 3","Player 4"];
+var OFF=[[-18,-14],[18,-14],[-18,14],[18,14]];
+var NS="http://www.w3.org/2000/svg";
+var svg=document.getElementById("board");
+
+function ctr(n){
+  var r=Math.floor((n-1)/10),c=(n-1)%10;if(r%2===1)c=9-c;
+  return [c*CW+CW/2,(9-r)*CH+CH/2];
+}
+function el(tag,attrs,parent){
+  var e=document.createElementNS(NS,tag);
+  for(var k in attrs)e.setAttribute(k,attrs[k]);
+  (parent||svg).appendChild(e);return e;
+}
+
+/* squares */
+var css=getComputedStyle(document.documentElement);
+for(var n=1;n<=100;n++){
+  var r=Math.floor((n-1)/10),c=(n-1)%10;if(r%2===1)c=9-c;
+  var p=ctr(n);
+  el("rect",{x:c*CW,y:(9-r)*CH,width:CW,height:CH,fill:((r+c)%2===0)?"#8a5a76":"#f3f3f3",stroke:"#555","stroke-width":.6,"stroke-dasharray":"2 2"});
+  el("text",{x:p[0],y:p[1]+9,"text-anchor":"middle","font-size":28,"font-weight":700,fill:((r+c)%2===0)?"#fff":"#1d1a20"}).textContent=n;
+}
+var mush=el("text",{x:ctr(100)[0]+26,y:ctr(100)[1]-18,"font-size":24,"text-anchor":"middle"});mush.textContent="🍄";
+
+/* ladders */
+function ladder(a,b){
+  var p=ctr(a),q=ctr(b);
+  var dx=q[0]-p[0],dy=q[1]-p[1],L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L,nx=-uy*11,ny=ux*11;
+  var g=el("g",{});
+  var col="#4fa7ae";
+  el("line",{x1:p[0]+nx,y1:p[1]+ny,x2:q[0]+nx,y2:q[1]+ny,stroke:col,"stroke-width":6,"stroke-linecap":"round"},g);
+  el("line",{x1:p[0]-nx,y1:p[1]-ny,x2:q[0]-nx,y2:q[1]-ny,stroke:col,"stroke-width":6,"stroke-linecap":"round"},g);
+  for(var d=20;d<L-8;d+=24){
+    var cx=p[0]+ux*d,cy=p[1]+uy*d;
+    el("line",{x1:cx+nx,y1:cy+ny,x2:cx-nx,y2:cy-ny,stroke:"#7cc3c8","stroke-width":5,"stroke-linecap":"round"},g);
+  }
+}
+for(var a in LADDERS)ladder(+a,LADDERS[a]);
+
+/* snakes */
+var SC=[["#ff7f7f","#c94a4a"],["#a8d44a","#6f9a1f"]];
+function snake(h,t,i){
+  var p=ctr(h),q=ctr(t);
+  var dx=q[0]-p[0],dy=q[1]-p[1],L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L,nx=-uy,ny=ux;
+  var waves=Math.max(2,Math.round(L/110)),amp=22,pts=[];
+  for(var k=0;k<=40;k++){
+    var s=k/40,w=Math.sin(s*Math.PI*waves*2)*amp*(0.5+0.5*Math.sin(s*Math.PI));
+    pts.push([p[0]+dx*s+nx*w,p[1]+dy*s+ny*w]);
+  }
+  var d="M"+pts.map(function(z){return z[0].toFixed(1)+" "+z[1].toFixed(1)}).join(" L");
+  var col=SC[i%2],g=el("g",{});
+  el("path",{d:d,fill:"none",stroke:col[1],"stroke-width":17,"stroke-linecap":"round","stroke-linejoin":"round"},g);
+  el("path",{d:d,fill:"none",stroke:col[0],"stroke-width":13,"stroke-linecap":"round","stroke-linejoin":"round"},g);
+  el("path",{d:d,fill:"none",stroke:col[1],"stroke-width":3,"stroke-linecap":"round","stroke-dasharray":"0 9"},g);
+  var hd=pts[0],ang=Math.atan2(pts[0][1]-pts[2][1],pts[0][0]-pts[2][0])*180/Math.PI;
+  var hg=el("g",{transform:"translate("+hd[0]+" "+hd[1]+") rotate("+ang+")"},g);
+  el("ellipse",{cx:4,cy:0,rx:15,ry:11,fill:col[0],stroke:col[1],"stroke-width":2},hg);
+  el("circle",{cx:6,cy:-5,r:3.2,fill:"#fff"},hg);el("circle",{cx:6,cy:5,r:3.2,fill:"#fff"},hg);
+  el("circle",{cx:7,cy:-5,r:1.5,fill:"#111"},hg);el("circle",{cx:7,cy:5,r:1.5,fill:"#111"},hg);
+  el("path",{d:"M18 0 L28 0 M28 0 L33 -4 M28 0 L33 4",stroke:"#d11",fill:"none","stroke-width":2,"stroke-linecap":"round"},hg);
+}
+var i=0;for(var h in SNAKES){snake(+h,SNAKES[h],i++);}
+
+/* tokens */
+var pos=[1,1,1,1],tokens=[],cur=0,busy=false,msgs=[];
+function place(t,n){var p=ctr(n);tokens[t].style.transform="translate("+(p[0]+OFF[t][0])+"px,"+(p[1]+OFF[t][1])+"px)";}
+for(var t=0;t<4;t++){
+  var g=el("g",{"class":"tok"});
+  el("circle",{r:14,fill:COLORS[t],stroke:"#fff","stroke-width":3},g);
+  el("text",{y:5,"text-anchor":"middle","font-size":14,"font-weight":800,fill:"#fff"},g).textContent=t+1;
+  tokens.push(g);place(t,1);
+}
+
+/* ui */
+var turnEl=document.getElementById("turn"),dieEl=document.getElementById("die"),
+rollBtn=document.getElementById("rollBtn"),logEl=document.getElementById("log"),
+plEl=document.getElementById("players"),winEl=document.getElementById("win");
+var FACES=["⚀","⚁","⚂","⚃","⚄","⚅"];
+function renderPlayers(){
+  plEl.innerHTML="";
+  for(var t=0;t<4;t++){
+    var d=document.createElement("div");d.className="pl"+(t===cur?" on":"");
+    d.innerHTML='<span class="dot" style="background:'+COLORS[t]+'"></span>'+NAMES[t]+'<b>'+pos[t]+'</b>';
+    plEl.appendChild(d);
+  }
+  turnEl.textContent=NAMES[cur]+"’s turn";
+}
+function log(m){msgs.unshift(m);msgs=msgs.slice(0,5);logEl.innerHTML=msgs.map(function(x){return"<li>"+x+"</li>"}).join("");}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+
+async function turn(){
+  if(busy)return;busy=true;rollBtn.disabled=true;
+  dieEl.classList.add("spin");
+  for(var k=0;k<6;k++){dieEl.textContent=FACES[Math.floor(Math.random()*6)];await sleep(80);}
+  dieEl.classList.remove("spin");
+  var d=1+Math.floor(Math.random()*6);dieEl.textContent=FACES[d-1];
+  var me=NAMES[cur],t=cur,target=pos[t]+d;
+  if(target>100){
+    log(me+" rolled "+d+" and needs exactly "+(100-pos[t])+" to finish.");
+  }else{
+    log(me+" rolled "+d+".");
+    for(var s=0;s<d;s++){pos[t]++;place(t,pos[t]);renderPlayers();await sleep(230);}
+    if(LADDERS[pos[t]]){var to=LADDERS[pos[t]];log(me+" climbed a ladder from "+pos[t]+" to "+to+"!");await sleep(250);pos[t]=to;place(t,to);await sleep(450);}
+    else if(SNAKES[pos[t]]){var dn=SNAKES[pos[t]];log(me+" was bitten by a snake and slid from "+pos[t]+" to "+dn+".");await sleep(250);pos[t]=dn;place(t,dn);await sleep(450);}
+    if(pos[t]===100){renderPlayers();document.getElementById("winTitle").textContent=me+" wins!";winEl.classList.add("show");busy=false;return;}
+  }
+  if(d===6&&target<=100){log(me+" rolled a 6 and goes again.");}
+  else cur=(cur+1)%4;
+  renderPlayers();busy=false;rollBtn.disabled=false;
+}
+function reset(){
+  pos=[1,1,1,1];cur=0;msgs=[];logEl.innerHTML="";
+  for(var t=0;t<4;t++)place(t,1);
+  winEl.classList.remove("show");busy=false;rollBtn.disabled=false;
+  dieEl.textContent=FACES[0];log("New game: all players start on square 1.");renderPlayers();
+}
+rollBtn.addEventListener("click",turn);
+document.getElementById("resetBtn").addEventListener("click",reset);
+document.getElementById("again").addEventListener("click",reset);
+reset();
+})();
+</script>
+</body>
+</html>
